@@ -3,10 +3,25 @@
 let
   powercord-overlay = import (builtins.fetchTarball "https://github.com/LavaDesu/powercord-overlay/archive/master.tar.gz");
   moz_overlay = import (builtins.fetchTarball "https://github.com/mozilla/nixpkgs-mozilla/archive/master.tar.gz");
+  rust = pkgs.latest.rustChannels.stable.rust.override {
+    targets = [ "x86_64-unknown-linux-musl" "thumbv7em-none-eabihf" ];
+  };
+  nix-alien-pkgs = import (
+    fetchTarball "https://github.com/thiagokokada/nix-alien/tarball/master"
+  ) { };
+  secrets = import ./secrets.nix;
 in
 {
   nixpkgs.config.allowUnfree = true;
-  nixpkgs.overlays = [ powercord-overlay.overlay moz_overlay ];
+  nixpkgs.overlays = [
+    powercord-overlay.overlay
+    moz_overlay
+    (self: super: {
+      discord-canary = super.discord-canary.override {
+        nss = pkgs.nss_latest;
+      };
+    })
+  ];
 
   # Home Manager needs a bit of information about you and the
   # paths it should manage.
@@ -23,7 +38,11 @@ in
   # changes in each release.
   home.stateVersion = "22.05";
 
-  home.packages = [
+  home.packages = with nix-alien-pkgs; [
+    rust
+    pkgs.musl
+    pkgs.musl.dev
+    
     pkgs.kate
     pkgs.git
     pkgs.nerdfonts
@@ -32,16 +51,47 @@ in
     pkgs.onlykey-cli
     pkgs.keepassxc
     pkgs.yakuake
-    pkgs.latest.rustChannels.stable.rust
     pkgs.polymc
+    pkgs.nanum
+    pkgs.thunderbird
+    pkgs.ckan
+    pkgs.libsForQt5.ark
+    pkgs.kicad
+    pkgs.eagle
+    pkgs.gcc
+    pkgs.openocd
+    pkgs.blender
+    pkgs.godot
+    pkgs.tiled
+    pkgs.thefuck
+
+    nix-alien
+    nix-index-update
+    pkgs.nix-index
+
+    (import (fetchGit "https://github.com/haslersn/fish-nix-shell"))
   ];
 
   services.syncthing = {
     enable = true;
   };
 
+  services.spotifyd = {
+    enable = true;
+    settings = {
+      global = {
+        username = "31dohyohht5s5rb7xq4vfw6ihomq";
+        password = secrets.spotify_password;
+        bitrate = 320;
+        device_type = "computer";
+        device_name = "chell";
+      };
+    };
+  };
+
   programs.zsh = {
     enable = true;
+    autocd = true;
     zplug = {
       enable = true;
       plugins = [
@@ -50,6 +100,19 @@ in
         { name = "chisui/zsh-nix-shell"; }
         { name = "zsh-users/zsh-syntax-highlighting"; tags = [ defer:2 ]; }
       ];
+    };
+  };
+
+  programs.fish = {
+    enable = true;
+    interactiveShellInit = ''
+      fish-nix-shell | source
+      thefuck --alias | source
+    '';
+    functions = {
+      fish_greeting = ''
+      curl wttr.in/\?0
+      '';
     };
   };
 
@@ -66,7 +129,7 @@ in
 
   programs.starship = {
     enable = true;
-    enableZshIntegration = true;
+    enableFishIntegration = true;
   };
 
   programs.vscode = {
@@ -76,7 +139,6 @@ in
       matklad.rust-analyzer
       tamasfe.even-better-toml
       coenraads.bracket-pair-colorizer-2
-      github.copilot
       jnoortheen.nix-ide
     ];
   };
